@@ -1,0 +1,18 @@
+global:
+  name: "vault-demo"
+  namespace: "c2053d"
+  short-env: "dev"
+
+server:
+  image:
+    registry: "artifacts.developer.gov.bc.ca"
+    context: "/cc20-gen-docker-local"
+  route:
+      internal:
+        enabled: true
+        host: nestapp-test.apps.silver.devops.gov.bc.ca
+vault:
+  secret: "vault-secret"
+  storage:
+    classname: "netapp-file-backup"
+    backup: "500Mi"

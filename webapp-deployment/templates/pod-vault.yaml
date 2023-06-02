@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.global.name }}
+  labels:
+    app: {{ .Values.global.name }}
+    purpose: {{ .Values.global.name }}
+spec:    
+  volumes:
+    - name: shared-data
+      configMap: 
+        name: {{ .Values.global.name }}-intention-config
+    - name: envconsul-config
+      configMap:
+        name: {{ .Values.global.name }}-envconsul-config
+    - name: output
+      emptyDir: {}  
+  imagePullSecrets:
+  - name: vault-token-retrieve    
+  containers:
+  - name: {{ .Values.global.name }}-nestapp
+    image: "{{ .Values.server.image.registry }}{{ .Values.server.image.context }}/nest-app:test"
+    imagePullPolicy: Always
+    volumeMounts:
+      - name: output
+        mountPath: /config/token
+      - name: envconsul-config
+        mountPath: /config/envconsul
+    command: ["/bin/bash"]
+    args: ['-c', 'envconsul -config /config/envconsul/env.hcl node dist/main']
+  initContainers:
+  - name: {{ .Values.global.name }}-init
+    image: "{{ .Values.server.image.registry }}{{ .Values.server.image.context }}/vault-token-retrieve:test"
+    imagePullPolicy: Always
+    ports:
+      - containerPort: 3600
+    volumeMounts:
+      - name: shared-data        
+        mountPath: /broker/config
+      - name: output
+        mountPath: /broker/output
+    env:
+      - name: INTENTION_DATA
+        valueFrom:
+          configMapKeyRef:
+            name: {{ .Values.global.name }}-intention-config
+            key: "intention.json"
+      - name: ROLE_ID
+        valueFrom:
+          secretKeyRef:
+            name: vault-secret
+            key: role
+      - name: BROKER_JWT
+        valueFrom:
+          secretKeyRef:
+            name: vault-secret
+            key: token
+      - name: EVENT_URL
+        value: "https://console.apps.silver.devops.gov.bc.ca/k8s/ns/c2053d-dev/pods/vault-demo-init"
+    command:
+      - /bin/sh
+      - '-c'
+      - |
+        echo 'container starts!'
+        PROVISION_NAME=$(echo $INTENTION_DATA | jq -r '.actions[0].id')        
+        USER=$(echo $INTENTION_DATA | jq -r '.user.id')
+        ./get-vault-token.sh $BROKER_JWT $ROLE_ID $PROVISION_NAME $EVENT_URL $USER        
